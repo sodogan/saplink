@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PROG NAME="ZNL4B_BACKUP_TABLES" VARCL="X" SUBC="1" RMAND="068" RLOAD="D" FIXPT="X" UCCHECK="X">
+ <textPool>
+  <language SPRAS="D">
+   <textElement ID="R" ENTRY="Report ZNL4B_BACKUP_TABLES" LENGTH="26 "/>
+  </language>
+ </textPool>
+ <source>*&amp;---------------------------------------------------------------------*
+*&amp; Report  ZNL4B_BACKUP_TABLES                                         *
+*&amp;---------------------------------------------------------------------*
+*&amp; Leon Boeijen (NL for Business Consultancy, www.nl4b.com)            *
+*&amp; Leon.Boeijen@NL4B.com                                               *
+*&amp;---------------------------------------------------------------------*
+*&amp; This program stores the content of the selected database tables     *
+*&amp; as seperate xml files in one Zip file on your local file system.    *
+*&amp; Use programm ZNL4B_RESTORE_TABLES to write the data from the zip-   *
+*&amp; file back into the database.                                        *
+*&amp;---------------------------------------------------------------------*
+
+REPORT  znl4b_backup_tables.
+*--------------------------------------------------------------------*
+* Data
+*--------------------------------------------------------------------*
+DATA: lt_dd02v    TYPE STANDARD TABLE OF dd02v,
+      ls_dd02v    LIKE LINE OF lt_dd02v,
+      dref_tab    TYPE REF TO data,
+      dref_wa     TYPE REF TO data,
+      l_ixml      TYPE xstring,
+      lo_izip     TYPE REF TO cl_abap_zip,
+      l_zip_file  TYPE xstring,
+      l_name      TYPE string,
+      l_index     TYPE n LENGTH 6,
+      l_filename  TYPE string,
+      l_path      TYPE string,
+      l_fullpath  TYPE string,
+      lt_binary   TYPE STANDARD TABLE OF x255.
+
+*--------------------------------------------------------------------*
+* Field-Symbols
+*--------------------------------------------------------------------*
+FIELD-SYMBOLS: &lt;dyn_tab&gt;  TYPE table,
+               &lt;dyn_wa&gt;   TYPE ANY.
+*--------------------------------------------------------------------*
+* Selection Screen
+*--------------------------------------------------------------------*
+SELECT-OPTIONS: so_tab FOR ls_dd02v-tabname OBLIGATORY.
+
+*--------------------------------------------------------------------*
+* Start-of-selection
+*--------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  SELECT * INTO TABLE lt_dd02v
+    FROM dd02v
+    WHERE tabname IN so_tab.
+  IF sy-subrc EQ 0.
+    CREATE OBJECT lo_izip.
+    LOOP AT lt_dd02v INTO ls_dd02v.
+* Create dynamic internal table and work area
+      CREATE DATA dref_tab TYPE TABLE OF (ls_dd02v-tabname).
+      ASSIGN dref_tab-&gt;* TO &lt;dyn_tab&gt;.
+      CREATE DATA dref_wa LIKE LINE OF &lt;dyn_tab&gt;.
+      ASSIGN dref_wa-&gt;* TO &lt;dyn_wa&gt;.
+
+      CLEAR: l_index.
+      SELECT * INTO TABLE &lt;dyn_tab&gt; PACKAGE SIZE 1000
+        FROM (ls_dd02v-tabname).
+
+        CALL TRANSFORMATION id
+          SOURCE data = &lt;dyn_tab&gt;
+          RESULT XML  l_ixml.
+        l_index = l_index + 1.
+        CONCATENATE ls_dd02v-tabname &apos;#&apos; l_index &apos;.xml&apos; INTO l_name.
+
+        lo_izip-&gt;add( name = l_name
+                   content = l_ixml ).
+      ENDSELECT.
+    ENDLOOP.
+
+    l_zip_file = lo_izip-&gt;save( ).
+
+    CALL FUNCTION &apos;SCMS_XSTRING_TO_BINARY&apos;
+      EXPORTING
+        buffer     = l_zip_file
+      TABLES
+        binary_tab = lt_binary.
+
+    CONCATENATE sy-sysid &apos;_tables.zip&apos; INTO l_name.
+
+    cl_gui_frontend_services=&gt;file_save_dialog(
+      EXPORTING
+        default_file_name    = l_name
+      CHANGING
+        filename             = l_filename
+        path                 = l_path
+        fullpath             = l_fullpath ).
+
+    cl_gui_frontend_services=&gt;gui_download(
+      EXPORTING
+        filename                  = l_fullpath
+        filetype                  = &apos;BIN&apos;
+      CHANGING
+        data_tab                  = lt_binary ).
+
+    WRITE:/ &apos;Data is saved in file:&apos;,
+            l_fullpath,
+            &apos;.&apos;.
+  ENDIF.</source>
+</PROG>

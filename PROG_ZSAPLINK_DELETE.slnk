@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PROG NAME="ZSAPLINK_DELETE" VARCL="X" SUBC="1" RMAND="000" RLOAD="E" FIXPT="X" UCCHECK="X">
+ <textPool>
+  <language SPRAS="E">
+   <textElement ID="R" ENTRY="Delete SAPLINK" LENGTH="14 "/>
+  </language>
+ </textPool>
+ <source>*&amp;---------------------------------------------------------------------*
+*&amp; Report  ZSAPLINK_DELETE
+*&amp;---------------------------------------------------------------------*
+*&amp; Delete SAPlink program&apos;s, and classes loaded in this system.
+*&amp;---------------------------------------------------------------------*
+
+REPORT  zsaplink_delete.
+*---------------------------------------------------------------------*
+* Data
+*---------------------------------------------------------------------*
+DATA: lt_classes TYPE STANDARD TABLE OF seoclskey.
+*---------------------------------------------------------------------*
+* Start-of-selection
+*---------------------------------------------------------------------*
+PERFORM get_classes.
+PERFORM delete_classes.
+PERFORM delete_programs USING:
+      &apos;ZSAPLINK&apos;,
+      &apos;ZSAPLINK_INSTALLER_TEMPLATE&apos;,
+      &apos;ZSAPLINK_DEV_CLASS&apos;,
+      &apos;ZSAPLINK_TRANSPORTER&apos;,
+      &apos;ZNL4B_BACKUP_TABLES&apos;,
+      &apos;ZNL4B_RESTORE_TABLES&apos;.
+PERFORM delete_me.
+*Correct the update in SE80.
+DELETE FROM dirtree WHERE tname LIKE &apos;EU_$TMP%&apos;.
+COMMIT WORK AND WAIT.
+*---------------------------------------------------------------------*
+* Forms and Routines
+*---------------------------------------------------------------------*
+*&amp;---------------------------------------------------------------------*
+*&amp;      Form  GET_CLASSES
+*&amp;---------------------------------------------------------------------*
+FORM get_classes .
+  SELECT clsname INTO TABLE lt_classes
+    FROM seometarel
+    WHERE refclsname EQ &apos;ZSAPLINK&apos;.
+  IF sy-subrc EQ 0.
+    APPEND &apos;ZCX_SAPLINK&apos; TO lt_classes.
+    APPEND &apos;ZSAPLINK&apos; TO lt_classes.
+    APPEND &apos;ZSAPLINK_NUGGET&apos; TO lt_classes.
+  ENDIF.
+ENDFORM.                    &quot; GET_CLASSES
+*&amp;---------------------------------------------------------------------*
+*&amp;      Form  DELETE_CLASSES
+*&amp;---------------------------------------------------------------------*
+FORM delete_classes .
+  DATA: ls_classes LIKE LINE OF lt_classes.
+  LOOP AT lt_classes INTO ls_classes.
+    CALL FUNCTION &apos;SEO_CLASS_DELETE_COMPLETE&apos;
+      EXPORTING
+        clskey       = ls_classes
+      EXCEPTIONS
+        not_existing = 1
+        is_interface = 2
+        db_error     = 3
+        no_access    = 4
+        other        = 5
+        OTHERS       = 6.
+    IF sy-subrc &lt;&gt; 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    &quot; DELETE_CLASSES
+*&amp;---------------------------------------------------------------------*
+*&amp;      Form  DELETE_PROGRAMS
+*&amp;---------------------------------------------------------------------*
+FORM delete_programs USING: value(p_report).
+  CALL FUNCTION &apos;RS_DELETE_PROGRAM&apos;
+    EXPORTING
+      program            = p_report
+      suppress_checks    = &apos;X&apos;
+      suppress_popup     = &apos;X&apos;
+    EXCEPTIONS
+      enqueue_lock       = 1
+      object_not_found   = 2
+      permission_failure = 3
+      reject_deletion    = 4
+      OTHERS             = 5.
+  IF sy-subrc &lt;&gt; 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.                    &quot; DELETE_PROGRAMS
+*&amp;---------------------------------------------------------------------*
+*&amp;      Form  DELETE_ME
+*&amp;---------------------------------------------------------------------*
+FORM delete_me .
+  CALL FUNCTION &apos;RS_DELETE_PROGRAM&apos;
+    EXPORTING
+      program            = sy-cprog
+      suppress_checks    = &apos;X&apos;
+      suppress_popup     = &apos;X&apos;
+    EXCEPTIONS
+      enqueue_lock       = 1
+      object_not_found   = 2
+      permission_failure = 3
+      reject_deletion    = 4
+      OTHERS             = 5.
+  IF sy-subrc &lt;&gt; 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.                    &quot; DELETE_ME</source>
+</PROG>
